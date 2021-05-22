@@ -14,9 +14,16 @@ import matplotlib.animation as animation
 from PIL import Image
 from sklearn.metrics import mean_absolute_error
 
-lems = r"C:\Users\user\mlems"
-imdir = r"C:\Users\user\im\podsvd"
-base = r"C:\\Users\user"
+
+# matlab_save_location = r"C:\code_playbin\daniel_efd\data\tir\july9_2200_first"
+# image_save_location = r"C:\code_playbin\daniel_efd\image_files"
+
+# lems = r"C:\Users\user\mlems"
+lems = r"C:\code_playbin\daniel_efd\data\alllems"
+imdir = r"C:\code_playbin\daniel_efd\image_files"
+# imdir = r"C:\Users\user\im\podsvd"
+# base = r"C:\\Users\user"
+base = r"C:\code_playbin\daniel_efd"
 
 os.chdir(lems)
 sl = []
@@ -56,7 +63,7 @@ sdf = sdf.loc[(sdf.index >= start) & (sdf.index < stop)]
 ddf = ddf.loc[(ddf.index >= start) & (ddf.index < stop)]
 
 
-sonicmag = sdf.mean(axis=1)
+sonicmag = sdf.mean(axis=1)  # target variables (mag,dir)
 sonicdir = ddf.mean(axis=1)
 
 speeddiff = np.abs(sdf[0] - sdf[1])
@@ -117,7 +124,7 @@ for i in range(len(files) - 1):
 angle = []
 for i, j in zip(ul, vl):
     angle.append(
-        (np.degrees(np.arctan(i / j)) + 65) % 360
+        (np.degrees(np.arctan(i / j)) + 65) % 360  # reorients vector into real space
     )  # orientation = 295, vec to dir = 180
 mag = []
 for i, j in zip(ul, vl):
