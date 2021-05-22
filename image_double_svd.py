@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+# -*- coding: utf-6 -*-
 """
 Created on Fri Apr 23 09:02:20 2021
 
@@ -9,12 +9,19 @@ import h5py
 import os
 from PIL import Image
 import string
-from scipy import signal
 import matplotlib.pyplot as plt
 from sklearn.decomposition import PCA
 from numba import jit
 
+# from scipy import signal
 # Snapshot SVD densoising, remove background "noise"
+
+
+def svd_decomp(data):
+    U, S, VT = np.linalg.svd(data)
+    S = np.diag(S)
+    return U, S, VT
+
 
 
 def pod(data):
@@ -27,10 +34,8 @@ def matrix_to_image(a):
     return (255 * (a - np.min(a)) / np.ptp(a)).astype(int)
 
 
-matlab_save_location = (
-    "/Users/grahamseamans/code_projects/daniel_efd/tir/july9_2200_first"
-)
-image_save_location = "/Users/grahamseamans/code_projects/daniel_efd/image_files"
+matlab_save_location = r"C:\code_playbin\daniel_efd\data\tir\july9_2200_first"
+image_save_location = r"C:\code_playbin\daniel_efd\image_files"
 
 files = []
 for file in os.listdir(matlab_save_location):
@@ -42,8 +47,6 @@ matlab_list = []
 for file in files:
     with h5py.File(file) as f:
         matlab_list.append(f["data"][:])
-
-print("read matlab files into list")
 
 video = np.concatenate(matlab_list, axis=0)
 video = np.flip(video, axis=1)
@@ -61,17 +64,20 @@ reshaped_video = np.stack(reshaped_video, axis=1)
 U, S, VT = np.linalg.svd(reshaped_video, full_matrices=False)
 S = np.diag(S)
 
+print(U)
+
 
 @jit(nopython=True)
-def high_low_svd(tensor, highest_kept_mode, lowest_kept_mode, is_full):
-    U, S, VT = np.linalg.svd(tensor, full_matrices=is_full)
-    S = np.diag(S)
+def high_low_svd_filter(U,S,VT, highest_kept_mode, lowest_kept_mode):
     return (
         U[:, highest_kept_mode:lowest_kept_mode]
         @ S[highest_kept_mode:lowest_kept_mode, highest_kept_mode:lowest_kept_mode]
         @ VT[highest_kept_mode:lowest_kept_mode, :]
     )
 
+def svd_and_filter(tensor, highest_kept_mode, lowest_kept_mode):
+    U, S, VT = svd_decomp(tensor) 
+    return high_low_svd_filter(U,S,VT, highest_kept_mode=highest_kept_mode, lowest_kept_mode=lowest_kept_mode)
 
 video = []
 lowest_kept_mode = 400
@@ -81,26 +87,15 @@ highest_background_mode = 0
 
 n = 2
 
-bandpass = high_low_svd(
-    reshaped_video, highest_kept_mode=0, lowest_kept_mode=400, is_full=False
-)
-background = high_low_svd(
-    reshaped_video, highest_kept_mode=0, lowest_kept_mode=12, is_full=False
+bandpass = high_low_svd_filter(
+    U,S,VT, highest_kept_mode=0, lowest_kept_mode=400 
 )
 
-# bandpass = (
-#     U[:, highest_kept_mode:lowest_kept_mode]
-#     @ S[highest_kept_mode:lowest_kept_mode, highest_kept_mode:lowest_kept_mode]
-#     @ VT[highest_kept_mode:lowest_kept_mode, :]
-# )
-# background = (
-#     U[:, highest_background_mode:lowest_background_mode]
-#     @ S[
-#         highest_background_mode:lowest_background_mode,
-#         highest_background_mode:lowest_background_mode,
-#     ]
-#     @ VT[highest_background_mode:lowest_background_mode, :]
-# )
+print(U)
+
+background = high_low_svd_filter(
+    U,S,VT,  highest_kept_mode=0, lowest_kept_mode=12 
+)
 
 
 def get_mode(u, basis):
@@ -126,15 +121,14 @@ for i in range(reshaped_video.shape[1]):
     video.append(x)
 
 
-@jit(nopython=True)
 def svd_of_image(video, lowest_kept_mode):
     twice_svd_video = []
     for frame in video:
-        bandpass = high_low_svd(
-            frame, highest_kept_mode=0, lowest_kept_mode=400, is_full=True
+        bandpass = svd_and_filter(
+            frame, highest_kept_mode=0, lowest_kept_mode=lowest_kept_mode
         )
         fill = np.mean(frame)
-        bandpass = np.where(np.abs(bandpass) < 0.2, bandpass, fill)
+        bandpass = np.where(np.abs(bandpass) < 0.3, bandpass, fill)
         twice_svd_video.append(bandpass)
     return twice_svd_video
 
