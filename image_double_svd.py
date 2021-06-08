@@ -9,7 +9,9 @@ import os
 from PIL import Image
 import string
 import matplotlib.pyplot as plt
+from numpy import float32, linalg
 from sklearn.decomposition import PCA
+import tensorflow as tf
 from numba import jit
 
 
@@ -33,7 +35,7 @@ def matrix_to_image(a):
 
 
 @jit(nopython=True)
-def high_low_svd_filter(U, S, VT, highest_kept_mode, lowest_kept_mode):
+def svd_filter(U, S, VT, highest_kept_mode, lowest_kept_mode):
     U = np.ascontiguousarray(U[:, highest_kept_mode:lowest_kept_mode])
     S = np.ascontiguousarray(
         S[highest_kept_mode:lowest_kept_mode, highest_kept_mode:lowest_kept_mode]
@@ -45,7 +47,7 @@ def high_low_svd_filter(U, S, VT, highest_kept_mode, lowest_kept_mode):
 @jit(nopython=True)
 def svd_and_filter(tensor, highest_kept_mode, lowest_kept_mode):
     U, S, VT = svd_decomp(tensor)
-    return high_low_svd_filter(
+    return svd_filter(
         U, S, VT, highest_kept_mode=highest_kept_mode, lowest_kept_mode=lowest_kept_mode
     )
 
@@ -67,6 +69,7 @@ def resample_matrix(matrix):
 matlab_save_location = os.path.join(os.getcwd(), "data", "tir", "july9_2200_first")
 image_save_location = os.path.join(os.getcwd(), "data", "images")
 
+"""
 files = []
 for file in os.listdir(matlab_save_location):
     files.append(file)
@@ -91,7 +94,65 @@ del matlab_list
 vectorized_frame_video = np.stack(vectorized_frame_video, axis=1)
 
 
-U, S, VT = svd_decomp(vectorized_frame_video, full_matricies=False)
+os.chdir(image_save_location)
+np.save("vectorized_frame_video.npy", vectorized_frame_video)
+"""
+
+video_matrix = np.load(image_save_location + "/video_matrix.npy")
+video_matrix = tf.convert_to_tensor(video_matrix)
+
+
+def get_left_right_snapshot(matrix):
+    return (matrix[:-1], matrix[1:])
+
+
+X, X_prime = get_left_right_snapshot(video_matrix)
+
+# def random_rows(matrix, num_rows):
+#     return matrix[np.random.choice(matrix.shape[0], num_rows, replace=False), :]
+
+
+def get_C(matrix, perc_sample):
+    (pixels, frames) = matrix.shape
+    p = perc_sample * pixels
+    return np.r.rand(round(p), frames)
+
+
+C = get_C(video_matrix, 0.01)
+compressed = C @ video_matrix.T
+
+assert 2 == 3
+
+print(C.shape, video_matrix.T.shape)
+
+Y, Y_prime = get_left_right_snapshot(compressed)
+U, S, VT = svd_decomp(Y)
+
+S_inv = np.linalg.pinv(S)
+A_hat = U.conj().T @ Y_prime @ VT @ S_inv
+W, V = np.linalg.eig(A_hat)
+
+Phi = X_prime @ VT @ S_inv @ W
+B = np.diag(linalg.lstsq(Phi, video_matrix[0]))
+V = np.vander(np.diag(V))
+
+
+background = svd_filter(Phi, B, V, highest_kept_mode=0, lowest_kept_mode=2)
+
+
+num_basis_vectors = 20
+axes = []
+fig = plt.figure()
+for i in range(num_basis_vectors):
+    bimage = vect_to_frame(get_mode(Phi, i))
+    axes.append(fig.add_subplot(3, 7, i + 1))
+    subplot_title = "Basis " + str(i)
+    axes[-1].set_title(subplot_title)
+    plt.imshow(bimage)
+plt.show()
+
+"""
+U, S, VT = svd_decomp(video_matrix, full_matricies=False)
 
 bandpass = high_low_svd_filter(U, S, VT, highest_kept_mode=0, lowest_kept_mode=400)
 background = high_low_svd_filter(U, S, VT, highest_kept_mode=0, lowest_kept_mode=12)
@@ -123,7 +184,7 @@ background = high_low_svd_filter(U, S, VT, highest_kept_mode=0, lowest_kept_mode
 time_svded_video = [
     resample_matrix(vect_to_frame(frame) - vect_to_frame(background_frame))
     for frame, background_frame in zip(
-        np.transpose(vectorized_frame_video),
+        np.transpose(video_matrix),
         np.transpose(background),
     )
 ]
@@ -158,3 +219,4 @@ for i, frame in enumerate(time_svded_video[:10]):
     # imname = "pod" + a + n + ".bmp"
     # imname = "pod" + i + ".bmp"
     im.save("pod" + str(i) + ".bmp")
+"""
