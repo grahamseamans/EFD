@@ -99,43 +99,74 @@ np.save("vectorized_frame_video.npy", vectorized_frame_video)
 """
 
 video_matrix = np.load(image_save_location + "/video_matrix.npy")
-video_matrix = tf.convert_to_tensor(video_matrix)
+video_matrix = tf.convert_to_tensor(video_matrix, dtype=tf.float32)
+video_matrix = video_matrix[:, :200]
+print(video_matrix.shape)
 
 
 def get_left_right_snapshot(matrix):
     return (matrix[:-1], matrix[1:])
 
 
+print(1)
 X, X_prime = get_left_right_snapshot(video_matrix)
+first_frame = video_matrix[0]
 
-# def random_rows(matrix, num_rows):
-#     return matrix[np.random.choice(matrix.shape[0], num_rows, replace=False), :]
-
-
-def get_C(matrix, perc_sample):
-    (pixels, frames) = matrix.shape
-    p = perc_sample * pixels
-    return np.r.rand(round(p), frames)
+print(2)
 
 
-C = get_C(video_matrix, 0.01)
-compressed = C @ video_matrix.T
+# def get_C(matrix, perc_sample):
+#     (pixels, frames) = matrix.shape
+#     p = perc_sample * pixels
+#     return tf.random.normal(shape=[frames, round(p)])
 
-assert 2 == 3
 
-print(C.shape, video_matrix.T.shape)
+# C = get_C(video_matrix, 0.01)
+# print(C.shape)
+# print(3)
+# print(C.shape, tf.transpose(video_matrix).shape)
+# assert 2 == 3
+# compressed = C @ tf.transpose(video_matrix)
+# del C
+print(video_matrix.shape)
+pixels, frames = video_matrix.shape
+chosen_pixels = np.random.choice(pixels, pixels // 1000, replace=False)
+compressed = tf.gather(video_matrix, chosen_pixels)
+
+print(compressed.shape)
+del video_matrix
+
+print(4)
 
 Y, Y_prime = get_left_right_snapshot(compressed)
-U, S, VT = svd_decomp(Y)
-
-S_inv = np.linalg.pinv(S)
-A_hat = U.conj().T @ Y_prime @ VT @ S_inv
-W, V = np.linalg.eig(A_hat)
-
+del compressed
+print(4.5)
+print(Y.shape)
+U, S, VT = tf.linalg.svd(Y)
+del Y
+print(5)
+print(S.shape)
+S_inv = tf.linalg.pinv(S)
+del S
+print(6)
+print(U.shape, Y_prime.shape, VT.shape, S_inv.shape)
+A_hat = tf.transpose(U, conjugate=True) @ Y_prime @ VT @ S_inv
+del Y_prime
+del U
+print(7)
+W, V = tf.linalg.eig(A_hat)
+del A_hat
+print(8)
 Phi = X_prime @ VT @ S_inv @ W
-B = np.diag(linalg.lstsq(Phi, video_matrix[0]))
-V = np.vander(np.diag(V))
-
+del W
+del VT
+del X_prime
+del S_inv
+print(9)
+B = tf.linalg.diag(tf.linalg.lstsq(Phi, video_matrix[0]))
+print(10)
+V = tf.experiemental.numpy.vander(V)
+print(11)
 
 background = svd_filter(Phi, B, V, highest_kept_mode=0, lowest_kept_mode=2)
 
