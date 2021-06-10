@@ -218,24 +218,9 @@ def get_subsample_indicies(num_pixels, min):
 #         )
 #     )
 
-"""
-okay so the video is nxm
-n = pixesl
-m = frames or time
-
-compression matrix is px(n or m)
-so it's some parameter, by n (number of pixels..)
-I assume that you want p to be less than m, or else you get something taller out...
-but it must be >= 1 according to the paper
-"""
-
-# random_matrix = np.random.permutation(video_matrix.shape[0] * video_matrix.shape[1])
-# random_matrix = random_matrix.reshape(video_matrix.shape[1], video_matrix.shape[0])
-# compression_matrix = random_matrix / np.linalg.norm(random_matrix)
 
 # chosen_pixels = get_subsample_indicies(pixels, 5000)
 # compressed = tf.gather(video_matrix, chosen_pixels)
-
 
 pixels, frames = video_matrix.shape
 
