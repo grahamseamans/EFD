@@ -13,11 +13,25 @@ from numpy import float32, linalg
 from numpy.core.numeric import full
 from sklearn.decomposition import PCA
 import tensorflow as tf
+from tensorflow.python.ops.gen_linalg_ops import svd
 from tensorflow.python.ops.math_ops import reduce_mean
 from sklearn.linear_model import OrthogonalMatchingPursuit
 import pydmd
 
-resample_factor = 5
+# resample_factor = 5
+
+# read in data
+matlab_save_location = os.path.join(os.getcwd(), "data", "tir", "july9_2200_first")
+image_save_location = os.path.join(os.getcwd(), "data", "images")
+video_matrix = np.load(image_save_location + "/video_matrix_normalized.npy")
+
+
+def to_tf_float32(Tensors):
+    return [tf.cast(tensor, tf.float32) for tensor in Tensors]
+
+
+def to_tf_float64(Tensors):
+    return [tf.cast(tensor, tf.float64) for tensor in Tensors]
 
 
 def display(Tensors):
@@ -31,10 +45,12 @@ def display(Tensors):
     print()
 
 
-def svd_decomp(data, full_matricies=False):
-    U, S, VT = np.linalg.svd(data, full_matricies)
-    S = np.diag(S)
-    return U, S, VT
+def svd_decomp(tensor):
+    S, U, V = tf.linalg.svd(tensor)
+    return U, tf.linalg.diag(S), tf.transpose(V)
+    # U, S, VT = tf.linalg.svd(data, full_matricies)
+    # S = tf.diag.diag(S)
+    # return U, tfS, VT
 
 
 def pod(data):
@@ -53,11 +69,17 @@ def matrix_to_image(a):
 #     return U @ S @ VT
 
 
-def svd_and_filter(tensor, highest_kept_mode, lowest_kept_mode):
+def svd_filter(U, S, VT, h, l):
+    U = U[:, h:l]
+    S = S[h:l, h:l]
+    VT = VT[h:l, :]
+    return U @ S @ VT
+
+
+def svd_and_filter(tensor, h, l):
     U, S, VT = svd_decomp(tensor)
-    return svd_filter(
-        U, S, VT, highest_kept_mode=highest_kept_mode, lowest_kept_mode=lowest_kept_mode
-    )
+    return svd_filter(U, S, VT, h=h, l=l)
+    # display([U, S, VT])
 
 
 def get_mode(u, basis):
@@ -71,10 +93,6 @@ def vect_to_frame(vect):
 def resample_matrix(matrix):
     return matrix[::resample_factor, ::resample_factor]
 
-
-# read in data
-matlab_save_location = os.path.join(os.getcwd(), "data", "tir", "july9_2200_first")
-image_save_location = os.path.join(os.getcwd(), "data", "images")
 
 """
 files = []
@@ -105,40 +123,73 @@ os.chdir(image_save_location)
 np.save("vectorized_frame_video.npy", vectorized_frame_video)
 """
 
-video_matrix = np.load(image_save_location + "/video_matrix.npy")
 
-video_matrix = tf.convert_to_tensor(video_matrix)
-video_matrix = tf.keras.layers.LayerNormalization(axis=1)(video_matrix)
+"""
+video_matrix = tf.convert_to_tensor(video_matrix, dtype=tf.float64)
+# video_matrix = tf.keras.layers.LayerNormalization(axis=1)(video_matrix)
 # video_matrix = tf.keras.layers.LayerNormalization(axis=1)(video_matrix).numpy()
+display([video_matrix])
+video_tensor = tf.reshape(video_matrix, (1024, 768, 400))
+video_matrix = video_matrix.numpy()
+print(0)
+random_matrix = np.random.permutation(video_matrix.shape[0] * video_matrix.shape[1])
+random_matrix = random_matrix.reshape(video_matrix.shape[1], video_matrix.shape[0])
+compression_matrix = random_matrix / np.linalg.norm(random_matrix)
 
-# dmd = pydmd.DMD(svd_rank=3, exact=False)
-# dmd.fit(video_matrix)
+dmd = pydmd.CDMD(svd_rank=2, compression_matrix=compression_matrix)
+dmd.fit(video_matrix)
 
-# background = dmd.reconstructed_data.real
-# display([background])
+background = dmd.reconstructed_data.real
+print(0)
 
-# background = tf.convert_to_tensor(background)
-# display([background])
-# video_background = tf.reshape(background, (400, 1024, 768))
+background = tf.convert_to_tensor(background, dtype=tf.float64)
+display([background])
+video_background = tf.reshape(background, (1024, 768, 400))
 
-# # video_tensor_tf = np.reshape(video_matrix, (1024, 768, 399))
-# # display([video_background, video_tensor_tf])
-# # time_svd_video = video_tensor_tf - video_background
+display([video_background, video_tensor])
 
-# assert not tf.math.equal(video_background[0], video_background[1])
+deback = tf.subtract(video_tensor, video_background)
+
+display([background])
+# video_tensor_tf = np.reshape(video_matrix, (1024, 768, 399))
+# display([video_background, video_tensor_tf])
+# time_svd_video = video_tensor_tf - video_background
+
 # num_basis_vectors = 20
 # axes = []
 # fig = plt.figure()
 # for i in range(0, num_basis_vectors):
-#     bimage = np.transpose(video_background[i])
+#     bimage = np.transpose(deback[:, :, i + 300])
 #     axes.append(fig.add_subplot(4, 5, i + 1))
 #     subplot_title = "Frame " + str(i)
 #     axes[-1].set_title(subplot_title)
 #     plt.imshow(bimage)
 # plt.show()
 
+print(1)
+twice_svd_video = []
+for frame in range(np.shape(deback)[2]):
+    bandpass = svd_and_filter(deback[:, :, frame], h=0, l=400)
+    twice_svd_video.append(bandpass)
+twice_svd_video
+print(2)
 
-video_matrix = tf.convert_to_tensor(video_matrix, dtype=tf.float32)
+num_basis_vectors = 20
+axes = []
+fig = plt.figure()
+for i in range(0, num_basis_vectors):
+    print(i)
+    bimage = tf.transpose(twice_svd_video[i])
+    axes.append(fig.add_subplot(4, 5, i + 1))
+    subplot_title = "Frame " + str(i)
+    axes[-1].set_title(subplot_title)
+    plt.imshow(bimage)
+plt.show()
+
+assert 2 == 3
+"""
+
+video_matrix = tf.convert_to_tensor(video_matrix, dtype=tf.float64)
 first_frame = video_matrix[:, 0]
 
 
@@ -155,82 +206,92 @@ def get_subsample_indicies(num_pixels, min):
     )
 
 
-pixels, frames = video_matrix.shape
-chosen_pixels = get_subsample_indicies(pixels, 5000)
-compressed = tf.gather(video_matrix, chosen_pixels)
-# display([compressed])
-# assert 2 == 3
-first_frame_compressed = compressed[:, 0]
+# UNTESTED
+# def subsample_pixesl(desired_pixels, video_matrix):
+#     actual_pixels, frames = video_matrix.shape
+#     return tf.gather(
+#         video_matrix,
+#         np.random.choice(
+#             actual_pixels,
+#             actual_pixels if desired_pixels > actual_pixels else desired_pixels,
+#             replace=False,
+#         )
+#     )
 
-# del video_matrix
+"""
+okay so the video is nxm
+n = pixesl
+m = frames or time
+
+compression matrix is px(n or m)
+so it's some parameter, by n (number of pixels..)
+I assume that you want p to be less than m, or else you get something taller out...
+but it must be >= 1 according to the paper
+"""
+
+# random_matrix = np.random.permutation(video_matrix.shape[0] * video_matrix.shape[1])
+# random_matrix = random_matrix.reshape(video_matrix.shape[1], video_matrix.shape[0])
+# compression_matrix = random_matrix / np.linalg.norm(random_matrix)
+
+# chosen_pixels = get_subsample_indicies(pixels, 5000)
+# compressed = tf.gather(video_matrix, chosen_pixels)
+
+
+pixels, frames = video_matrix.shape
+
+C = tf.random.normal(shape=[1000, pixels], dtype=tf.float64)
+compressed = C @ video_matrix
+display([compressed, C, video_matrix])
+
+first_frame_compressed = compressed[:, 0]
 Y, Y_prime = get_left_right_snapshot(compressed)
 del compressed
-S, U, VT = tf.linalg.svd(Y, full_matrices=False)
-S = tf.linalg.diag(S)
+U, S, VT = svd_decomp(Y)
+V = tf.transpose(VT)
+display([U, S, V])
 del Y
 S_inv = tf.linalg.pinv(S)
 del S
-A_hat = tf.transpose(U, conjugate=True) @ Y_prime @ VT @ S_inv
+display([tf.transpose(U, conjugate=True), Y_prime, V, S_inv])
+A_hat = tf.transpose(U, conjugate=True) @ Y_prime @ V @ S_inv
 del U
-V, W = tf.linalg.eig(A_hat)
-V = tf.cast(V, dtype=float32)
-W = tf.cast(W, dtype=float32)
+eigen_values, W = tf.linalg.eig(A_hat)
+W = tf.cast(W, dtype=tf.float64)
+eigen_values = tf.cast(eigen_values, dtype=tf.float64)
 del A_hat
-Phi = X_prime @ VT @ S_inv @ W
-Phi_y = Y_prime @ VT @ S_inv @ W
+Phi = X_prime @ V @ S_inv @ W
 del Y_prime
 del W
 del VT
 del X_prime
 del S_inv
-# b = np.linalg.lstsq(Phi.numpy(), first_frame.numpy())
-Phi_norm = tf.keras.layers.LayerNormalization(axis=1)(Phi)
-first_frame_norm = tf.keras.layers.LayerNormalization(axis=0)(first_frame)
-# Phi_norm = layer(Phi)
-print(Phi)
-print(Phi_norm)
-b = OrthogonalMatchingPursuit().fit(Phi_norm, first_frame_norm).coef_
-# b = OrthogonalMatchingPursuit().fit(Phi_y, first_frame_compressed).coef_
-b = tf.convert_to_tensor(b, dtype=float32)
-# b = tf.linalg.lstsq(Phi_y, first_frame_compressed)
+display([Phi, first_frame])
+# b = OrthogonalMatchingPursuit(n_nonzero_coefs=200).fit(Phi, first_frame).coef_
+# b = tf.convert_to_tensor(b, dtype=tf.float64)
+# b = tf.cast(
+#     tf.linalg.lstsq(tf.cast(Phi, tf.float64), tf.cast(first_frame, tf.float64)),
+#     tf.float32,
+# )
+b = tf.linalg.lstsq(Phi, tf.expand_dims(first_frame, -1))
+b = b[:, 0]
 B = tf.linalg.diag(b)
-V = tf.convert_to_tensor(np.vander((V)), dtype=float32)
+Vander = tf.convert_to_tensor(np.vander((eigen_values)), dtype=tf.float64)
 
-
-# video_tensor_np = []
-# for frame in video_matrix.numpy().T:
-#     print(frame.shape)
-#     video_tensor_np.append(vect_to_frame(frame))
-# video_tensor_np = np.stack(video_tensor_np, axis=1)
-# print(video_matrix.shape, video_tensor_np.shape, video_tensor_tf.shape)
-# print(video_tensor_tf - video_tensor_np)
-# Phi = Phi.numpy()
-# B = B.numpy()
-# V = V.numpy()
-
-# print(Phi.dtype, B.dtype, V.dtype)
-# print(Phi.shape, B.shape, V.shape)
-
-
-def svd_filter(U, S, VT, h, l):
-    U = U[:, h:l]
-    S = S[h:l, h:l]
-    VT = VT[h:l, :]
-    display([U, S, VT])
-    return U @ S @ VT
-
-
-# return U[:, h:l] @ S[h:l, h:l] @ VT[h:l, :]
-print("phi", Phi)
-print("B", B)
-print("V", V)
+print(b)
+print(Phi)
+print(Vander)
 video_matrix = video_matrix[:, :-1]
-background = svd_filter(Phi, B, V, h=0, l=4)
-# print(background)
+
+# U, S, VT = svd_decomp(video_matrix)
+background = svd_filter(Phi, B, Vander, h=0, l=5)
+# background = svd_filter(U, S, VT, h=0, l=5)
+
 video_tensor_tf = tf.reshape(video_matrix, (1024, 768, 399))
 video_background = tf.reshape(background, (1024, 768, 399))
-display([video_background, video_tensor_tf])
-# time_svd_video = video_tensor_tf - video_background
+# video_tensor_tf = tf.reshape(video_matrix, (1024, 768, 400))
+# video_background = tf.reshape(background, (1024, 768, 400))
+
+time_svd_video = video_tensor_tf - video_background
 
 num_basis_vectors = 20
 axes = []
@@ -241,12 +302,23 @@ for i in range(0, num_basis_vectors):
     subplot_title = "Frame " + str(i)
     axes[-1].set_title(subplot_title)
     plt.imshow(bimage)
+# plt.show()
 
 num_basis_vectors = 20
 axes = []
 fig = plt.figure()
 for i in range(0, num_basis_vectors):
     bimage = tf.transpose(video_tensor_tf[:, :, i])
+    axes.append(fig.add_subplot(4, 5, i + 1))
+    subplot_title = "Frame " + str(i)
+    axes[-1].set_title(subplot_title)
+    plt.imshow(bimage)
+
+num_basis_vectors = 20
+axes = []
+fig = plt.figure()
+for i in range(0, num_basis_vectors):
+    bimage = tf.transpose(time_svd_video[:, :, i])
     axes.append(fig.add_subplot(4, 5, i + 1))
     subplot_title = "Frame " + str(i)
     axes[-1].set_title(subplot_title)
