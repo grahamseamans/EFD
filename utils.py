@@ -18,18 +18,57 @@ from tensorflow.python.ops.math_ops import reduce_mean
 from sklearn.linear_model import OrthogonalMatchingPursuit
 import pydmd
 
-# matlab_save_location = os.path.join(os.getcwd(), "data", "tir", "july9_2200_first")
-# image_save_location = os.path.join(os.getcwd(), "data", "images")
+matlab_save_location = os.path.join(os.getcwd(), "data", "tir", "july9_2200_first")
+image_save_location = os.path.join(os.getcwd(), "data", "images")
+video_save_location = os.path.join(os.getcwd(), "data", "videos")
 # video_matrix = np.load(image_save_location + "/video_matrix.npy")
 # video_matrix = tf.convert_to_tensor(video_matrix, dtype=tf.float64)
 # video_matrix = tf.keras.layers.LayerNormalization(axis=1)(video_matrix)
 # video_tensor = tf.reshape(video_matrix, (1024, 768, 400))
 # np.save(image_save_location + "/video_matrix_normalized_64.npy", video_matrix.numpy())
 
+# def tensor_to_video(Tensor):
+#     display([Tensor])
+#     height, width, num_frames = Tensor.shape
+#     print(height, width, num_frames)
+#     filename = os.path.join(video_save_location, "test_video.avi")
+#     codec_id = "mp4v"  # ID for a video codec.
+#     fourcc = cv2.VideoWriter_fourcc(*code)
+#     out = cv2.VideoWriter(
+#         "test_video.avi", cv2.VideoWriter_fourcc(*"DIVX"), 20, (width, height)
+#     )
+#     for i in range(num_frames):
+#         out.write(Tensor[:, :, i])
 
-# resample_factor = 5
 
-# read in data
+def csvd_1(video_matrix, p):
+    X = video_matrix
+    pixels, frames = video_matrix.shape
+    C = tf.random.normal(shape=[p, pixels], dtype=tf.float64)
+    Y = C @ video_matrix
+    B = Y @ tf.transpose(Y)
+    B = 1 / 2 * (B + tf.transpose(B))
+    D, T = tf.linalg.eig(B)
+    D = tf.cast(D, dtype=tf.float64)
+    T = tf.cast(T, dtype=tf.float64)
+    S_s = tf.linalg.diag(tf.math.sqrt(D))
+    V_s = tf.transpose(Y) @ T @ tf.linalg.pinv(S_s)
+    U_s = X @ V_s
+    U, S, QT = svd_decomp(U_s)
+    V = V_s @ tf.transpose(QT)
+    return U, S, tf.transpose(V)
+
+
+def csvd_2(video_matrix, p):
+    X = video_matrix
+    pixels, frames = video_matrix.shape
+    C = tf.random.normal(shape=[p, pixels], dtype=tf.float64)
+    Y = C @ video_matrix
+    T, S_s, VT_s = svd_decomp(Y)
+    V_s = tf.transpose(VT_s)
+    U, S, Q = svd_decomp(X @ V_s)
+    V = V_s @ tf.transpose(Q)
+    return U, S, tf.transpose(V)
 
 
 def to_tf_float32(Tensors):

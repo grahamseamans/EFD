@@ -8,38 +8,15 @@ video_matrix = np.load(image_save_location + "/video_matrix.npy")
 video_matrix = tf.convert_to_tensor(video_matrix, dtype=tf.float64)
 first_frame = video_matrix[:, 0]
 
+# U, S, VT = csvd_1(video_matrix, p=40)
+U, S, VT = csvd_2(video_matrix, p=40)
 
-# X, X_prime = get_left_right_snapshot(video_matrix)
-X = video_matrix
-pixels, frames = video_matrix.shape
-
-C = tf.random.normal(shape=[20, pixels], dtype=tf.float64)
-display([C, video_matrix])
-Y = C @ video_matrix
-display([Y, tf.transpose(Y)])
-B = Y @ tf.transpose(Y)
-display([B, tf.transpose(B)])
-B = 1 / 2 * (B + tf.transpose(B))
-display([B])
-D, T = tf.linalg.eig(B)
-D = tf.cast(D, dtype=tf.float64)
-T = tf.cast(T, dtype=tf.float64)
-display([D])
-S_s = tf.linalg.diag(tf.math.sqrt(D))
-display([tf.transpose(Y), T, tf.linalg.pinv(S_s)])
-V_s = tf.transpose(Y) @ T @ tf.linalg.pinv(S_s)
-display([X, V_s])
-U_s = X @ V_s
-display([U_s])
-U, S, QT = svd_decomp(U_s)
-display([QT])
-V = V_s @ tf.transpose(QT)
-display([U, S, V])
-
-background = svd_filter(U, S, tf.transpose(V), h=0, l=2)
+background = svd_filter(U, S, VT, h=0, l=2)
 video_tensor_tf = tf.reshape(video_matrix, (1024, 768, 400))
 video_background = tf.reshape(background, (1024, 768, 400))
 time_svd_video = video_tensor_tf - video_background
+
+# tensor_to_video(video_tensor_tf)
 
 num_basis_vectors = 20
 axes = []
