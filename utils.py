@@ -1,44 +1,6 @@
-"""
-Created on Fri Apr 23 09:02:20 2021
-
-@author: user
-"""
+# Graham Seamans
 import numpy as np
-import h5py
-import os
-from PIL import Image
-import string
-import matplotlib.pyplot as plt
-from numpy import float32, linalg
-from numpy.core.numeric import full
-from sklearn.decomposition import PCA
 import tensorflow as tf
-from tensorflow.python.ops.gen_linalg_ops import svd
-from tensorflow.python.ops.math_ops import reduce_mean
-from sklearn.linear_model import OrthogonalMatchingPursuit
-import pydmd
-
-matlab_save_location = os.path.join(os.getcwd(), "data", "tir", "july9_2200_first")
-image_save_location = os.path.join(os.getcwd(), "data", "images")
-video_save_location = os.path.join(os.getcwd(), "data", "videos")
-# video_matrix = np.load(image_save_location + "/video_matrix.npy")
-# video_matrix = tf.convert_to_tensor(video_matrix, dtype=tf.float64)
-# video_matrix = tf.keras.layers.LayerNormalization(axis=1)(video_matrix)
-# video_tensor = tf.reshape(video_matrix, (1024, 768, 400))
-# np.save(image_save_location + "/video_matrix_normalized_64.npy", video_matrix.numpy())
-
-# def tensor_to_video(Tensor):
-#     display([Tensor])
-#     height, width, num_frames = Tensor.shape
-#     print(height, width, num_frames)
-#     filename = os.path.join(video_save_location, "test_video.avi")
-#     codec_id = "mp4v"  # ID for a video codec.
-#     fourcc = cv2.VideoWriter_fourcc(*code)
-#     out = cv2.VideoWriter(
-#         "test_video.avi", cv2.VideoWriter_fourcc(*"DIVX"), 20, (width, height)
-#     )
-#     for i in range(num_frames):
-#         out.write(Tensor[:, :, i])
 
 
 def csvd_1(video_matrix, p):
@@ -69,6 +31,32 @@ def csvd_2(video_matrix, p):
     U, S, Q = svd_decomp(X @ V_s)
     V = V_s @ tf.transpose(Q)
     return U, S, tf.transpose(V)
+
+
+def cdmd(video_matrix, p):
+    first_frame = video_matrix[:, 0]
+    X, X_prime = get_left_right_snapshot(video_matrix)
+    pixels, frames = video_matrix.shape
+    C = tf.random.normal(shape=[p, pixels], dtype=tf.float64)
+    compressed = C @ video_matrix
+    Y, Y_prime = get_left_right_snapshot(compressed)
+    U, S, VT = svd_decomp(Y)
+    V = tf.transpose(VT)
+    S_inv = tf.linalg.pinv(S)
+    A_hat = tf.transpose(U, conjugate=True) @ Y_prime @ V @ S_inv
+    eigen_values, W = tf.linalg.eig(A_hat)
+    W = tf.cast(W, dtype=tf.float64)
+    eigen_values = tf.cast(eigen_values, dtype=tf.float64)
+    Phi = X_prime @ V @ S_inv @ W
+    b = tf.linalg.lstsq(Phi, tf.expand_dims(first_frame, -1))
+    b = b[:, 0]
+    B = tf.linalg.diag(b)
+    Vander = tf.convert_to_tensor(np.vander((eigen_values)), dtype=tf.float64)
+    return Phi, B, Vander
+
+
+def background_thresholding(background, video, tao):
+    return tf.where((video - background) > tao, video, 0)
 
 
 def to_tf_float32(Tensors):
@@ -121,10 +109,6 @@ def get_mode(u, basis):
 
 def vect_to_frame(vect):
     return vect.reshape(1024, 768)
-
-
-def resample_matrix(matrix):
-    return matrix[::resample_factor, ::resample_factor]
 
 
 def get_left_right_snapshot(matrix):
