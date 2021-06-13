@@ -1,6 +1,28 @@
-# Graham Seamans
 import numpy as np
 import tensorflow as tf
+import os
+import cv2
+from tensorflow.python.ops.math_ops import reduce_min
+
+npy_path = os.path.join(os.getcwd(), "data", "npy")
+video_path = os.path.join(os.getcwd(), "data", "videos")
+
+
+def Tensor_to_video(Tensor, path):
+    video = tf.cast(255 * min_max_norm(Tensor), tf.uint8)
+    width, height, frames = video.shape
+    _fourcc = cv2.VideoWriter_fourcc(*"MP4V")
+    out = cv2.VideoWriter(path + ".mp4", _fourcc, 5, (width, height))
+    for i in range(frames):
+        img = video[:, :, i]
+        img = tf.repeat(tf.expand_dims(tf.transpose(img), axis=-1), 3, axis=2).numpy()
+        out.write(img)
+
+
+def min_max_norm(Tensor):
+    min = tf.reduce_min(Tensor)
+    max = tf.reduce_max(Tensor)
+    return (Tensor - min) / (max - min)
 
 
 def csvd_1(video_matrix, p):
