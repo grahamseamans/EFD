@@ -10,7 +10,7 @@ import cProfile
 import pstats
 import os
 
-video_matrix = np.load(os.path.join(os.getcwd(), "video_matrix.npy"))
+video_matrix = np.load(os.path.join(os.getcwd(), "video_matrix_tf.npy"))
 video_matrix = tf.convert_to_tensor(video_matrix, dtype=tf.float64)
 
 profiler = cProfile.Profile()
