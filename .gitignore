@@ -1,4 +1,6 @@
 /data
 .ipynb_checkpoints
 .vscode
+*.mp4
 *.npy
+# /__pycache__

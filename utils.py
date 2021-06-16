@@ -9,6 +9,8 @@ video_path = os.path.join(os.getcwd(), "data", "videos")
 
 
 def Tensor_to_video(Tensor, path):
+    # try l2 norm and then min_max
+    Tensor = tf.keras.utils.normalize(Tensor, axis=2, order=2)
     video = tf.cast(255 * min_max_norm(Tensor), tf.uint8)
     width, height, frames = video.shape
     _fourcc = cv2.VideoWriter_fourcc(*"MP4V")

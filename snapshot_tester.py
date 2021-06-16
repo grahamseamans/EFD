@@ -39,7 +39,7 @@ video_background = tf.reshape(background, (1024, 768, 400))
 
 time_svd_video = video_tensor_tf - video_background
 
-Tensor_to_video(time_svd_video[:, :, :200], os.path.join(video_path, "snapshot"))
+Tensor_to_video(time_svd_video, os.path.join(video_path, "snapshot"))
 
 assert 2 == 3
 num_basis_vectors = 20
