@@ -14,17 +14,10 @@ video_matrix = np.load(os.path.join(npy_path, "video_matrix_tf.npy"))
 video_matrix = tf.convert_to_tensor(video_matrix, dtype=tf.float64)
 
 
-profiler = cProfile.Profile()
-profiler.enable()
-
 # U, S, VT = csvd_1(video_matrix, p=40)
 U, S, VT = csvd_2(video_matrix, p=40)
 # U, S, VT = svd_decomp(video_matrix)
 # U, S, VT = cdmd(video_matrix, p=500)
-
-profiler.disable()
-stats = pstats.Stats(profiler)
-stats.strip_dirs().sort_stats("tottime").print_stats(10)
 
 background = svd_filter(U, S, VT, h=0, l=2)
 
@@ -38,10 +31,12 @@ video_background = tf.reshape(background, (1024, 768, 400))
 # video_background = tf.reshape(background, (1024, 768, 399))
 
 time_svd_video = video_tensor_tf - video_background
+# two_x_svd = frame_svd(time_svd_video, 800)
 
 Tensor_to_video(time_svd_video, os.path.join(video_path, "snapshot"))
-
+# Tensor_to_video(two_x_svd, os.path.join(video_path, "two_x_svd_800"))
 assert 2 == 3
+
 num_basis_vectors = 20
 axes = []
 fig = plt.figure()

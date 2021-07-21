@@ -1,6 +1,7 @@
 /data
 .ipynb_checkpoints
-.vscode
+.vscode/
 *.mp4
 *.npy
-# /__pycache__
+/__pycache__
+.DS_Store

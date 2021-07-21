@@ -1,6 +1,10 @@
+from re import A
 import numpy as np
+from numpy.lib.function_base import disp
 import tensorflow as tf
 import os
+import matplotlib.pyplot as plt
+import scipy.signal as signal
 import cv2
 from tensorflow.python.ops.math_ops import reduce_min
 
@@ -10,7 +14,7 @@ video_path = os.path.join(os.getcwd(), "data", "videos")
 
 def Tensor_to_video(Tensor, path):
     # try l2 norm and then min_max
-    Tensor = tf.keras.utils.normalize(Tensor, axis=2, order=2)
+    Tensor = tf.keras.utils.normalize(Tensor, axis=2, order=13)
     video = tf.cast(255 * min_max_norm(Tensor), tf.uint8)
     width, height, frames = video.shape
     _fourcc = cv2.VideoWriter_fourcc(*"MP4V")
@@ -45,11 +49,11 @@ def csvd_1(video_matrix, p):
     return U, S, tf.transpose(V)
 
 
-def csvd_2(video_matrix, p):
-    X = video_matrix
-    pixels, frames = video_matrix.shape
+def csvd_2(matrix, p):
+    X = matrix
+    pixels, frames = X.shape
     C = tf.random.normal(shape=[p, pixels], dtype=tf.float64)
-    Y = C @ video_matrix
+    Y = C @ X
     T, S_s, VT_s = svd_decomp(Y)
     V_s = tf.transpose(VT_s)
     U, S, Q = svd_decomp(X @ V_s)
@@ -77,6 +81,74 @@ def cdmd(video_matrix, p):
     B = tf.linalg.diag(b)
     Vander = tf.convert_to_tensor(np.vander((eigen_values)), dtype=tf.float64)
     return Phi, B, Vander
+
+
+def frame_svd(Tensor, p):
+    _, _, num_frames = Tensor.shape
+    # video = tf.transpose(Tensor, [2, 0, 1])
+    # video = tf.vectorized_map(svd_filter_wrapper, video, fallback_to_while_loop=True)
+    # display([video])
+    # assert 2 == 3
+    frames = []
+    for i in range(num_frames):
+        frame = Tensor[:, :, i]
+        frame = svd_and_filter(frame, 0, 200, p)
+        frames.append(frame)
+    x = tf.stack(frames, axis=-1)
+    display([x])
+    return x
+
+
+def svd_filter_wrapper(frame):
+    return svd_and_filter(frame, 0, 200, 400)
+
+
+def psd(VT, S, num_basis):
+    sl = tf.linalg.diag_part(S)
+    rwl = []
+    rfl = []
+    for i in range(num_basis):
+        rp = VT[i, :] * sl[i]
+        f, P = signal.welch(rp)
+        rwl.append(P)
+        rfl.append(f)
+
+    plt.subplots()
+    leg = []
+    con = 0
+    for f, p in zip(rfl, rwl):
+        print(f, p)
+        plt.loglog(f, p)
+        leg.append("Mode " + str(con + 1) + " S value " + str(int(sl[con])))
+        con += 1
+
+    plt.legend(leg)
+    plt.xlabel("Frequency [Hz]")
+    plt.ylabel("PSD [T**2/Hz]")
+
+    slope = -5 / 3
+    dx = 0.1
+    x0 = 0.004
+    # y0 = 10
+    # y = np.array(rwl)
+
+    # y0 = y[:, 0].mean()
+    # display([y, y0])
+
+    # x_input = np.logspace(0.0, 0.5, 127)
+    # x_axis = np.linspace(0.0, 0.5, 127)
+    # y = [10000 * (x ** slope) + y0 for x in x_input]
+    # print(y)
+    # plt.loglog(x_axis, y)
+
+    # print(x_axis, y)
+    # print(y)
+
+    x1, y1 = [x0, x0 + dx], [x0 ** slope / 2000, (x0 + dx) ** slope / 2000]
+    print(x1, y1)
+    plt.plot(x1, y1)
+    plt.text(0.02, 1, "-5/3 Slope", bbox=dict(facecolor="none", edgecolor="black"))
+    plt.show()
 
 
 def background_thresholding(background, video, tao):
@@ -122,8 +194,8 @@ def svd_filter(U, S, VT, h, l):
     return U @ S @ VT
 
 
-def svd_and_filter(tensor, h, l):
-    U, S, VT = svd_decomp(tensor)
+def svd_and_filter(tensor, h, l, p):
+    U, S, VT = csvd_2(tensor, p)
     return svd_filter(U, S, VT, h=h, l=l)
 
 
